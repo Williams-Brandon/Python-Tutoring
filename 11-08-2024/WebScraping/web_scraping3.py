@@ -1,38 +1,52 @@
-# Importing the required libraries: BeautifulSoup for HTML parsing and requests for making HTTP requests
 from bs4 import BeautifulSoup
 import requests
 
-# URL of the website to scrape data from
+# URL of the CoinMarketCap homepage
 url = "https://coinmarketcap.com/"
 
-# Sending an HTTP GET request to the URL and getting the HTML content as text
-result = requests.get(url).text  # The `.text` attribute extracts the response content as a string
+# Define headers to mimic a real browser request
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                  "AppleWebKit/537.36 (KHTML, like Gecko) "
+                  "Chrome/112.0.0.0 Safari/537.36",
+    "Accept-Language": "en-US,en;q=0.9",
+}
 
-# Parsing the HTML content with BeautifulSoup using the 'html.parser' parser
-doc = BeautifulSoup(result, "html.parser")
+# Send an HTTP GET request to the URL with headers
+response = requests.get(url, headers=headers)
 
-# Accessing the <tbody> element that contains the table data for cryptocurrencies
-tbody = doc.tbody  # Directly accesses the first <tbody> element in the document
+# Check if the request was successful
+if response.status_code != 200:
+    print(f"Failed to retrieve the page. Status code: {response.status_code}")
+    exit()
 
-# Getting all child elements (rows) within the <tbody>
-trs = tbody.contents  # `contents` returns a list of all immediate children (typically <tr> elements)
+# Parse the HTML content using BeautifulSoup
+soup = BeautifulSoup(response.text, "html.parser")
 
-# Initializing an empty dictionary to store cryptocurrency names and their corresponding prices
-prices = {}
+# Initialize a variable to store Bitcoin's price
+bitcoin_price = None
 
-# Iterating over the first 10 rows (<tr> elements) in the table body
-for tr in trs[:10]:  # Slice notation `[:10]` ensures only the first 10 rows are processed
-    # Extracting the 3rd and 4th child elements (<td> elements) from each <tr>
-    name, price = tr.contents[2:4]  # Unpacks the 3rd and 4th elements (name and price columns)
+# Find all table rows in the page
+rows = soup.find_all('tr')
 
-    # Extracting the text content from the <p> tag within the 'name' <td> element
-    fixed_name = name.p.string  # Retrieves the string directly from the <p> tag containing the cryptocurrency name
+for row in rows:
+    # Look for an 'a' tag with an href attribute that includes '/currencies/bitcoin/'
+    a_tag = row.find('a', href=lambda href: href and '/currencies/bitcoin/' in href)
+    if a_tag:
+        # Once the Bitcoin row is found, find all 'td' elements in that row
+        tds = row.find_all('td')
+        
+        # Ensure there are enough 'td' elements to extract the price
+        if len(tds) >= 4:
+            # The price is typically in the 4th 'td' element (index 3)
+            price_td = tds[3]
+            
+            # Extract the text content and clean it up
+            bitcoin_price = price_td.get_text(strip=True)
+            break  # Exit the loop once Bitcoin's price is found
 
-    # Extracting the text content from the <a> tag within the 'price' <td> element
-    fixed_price = price.a.string  # Retrieves the string directly from the <a> tag containing the price
-
-    # Adding the name and price to the dictionary
-    prices[fixed_name] = fixed_price  # Sets the cryptocurrency name as the key and its price as the value
-
-# Printing the dictionary containing the names and prices of the top 10 cryptocurrencies
-print(prices)
+# Print the result
+if bitcoin_price:
+    print(f"The current price of Bitcoin is: {bitcoin_price}")
+else:
+    print("Bitcoin price not found.")
