@@ -1,64 +1,62 @@
 # Importing required libraries
-from bs4 import BeautifulSoup  # Used for parsing and navigating HTML content
-import requests  # Used for making HTTP requests to retrieve web content
-import re  # Regular expressions library for pattern matching in text
+import requests  # Helps us download the webpage
+from bs4 import BeautifulSoup  # Helps us read and parse the webpage
 
-# Taking user input for the product search term
-search_term = input("What product do you want to search for? ")
+# Step 1: Ask the user what product they want to search for
+search_term = input("What product do you want to search for on Newegg? ")
 
-# Constructing the URL for the search query
-url = f"https://www.newegg.ca/p/pl?d={search_term}&N=4131"
-page = requests.get(url).text  # Sends a GET request to the URL and extracts the content as text
-doc = BeautifulSoup(page, "html.parser")  # Parses the HTML content using BeautifulSoup
+# Step 2: Create the search URL
+# Newegg's search URL looks like this: https://www.newegg.com/p/pl?d=SEARCH_TERM
+# We'll replace SEARCH_TERM with what the user entered
+url = f"https://www.newegg.com/p/pl?d={search_term}"
 
-# Finding the pagination information (if it exists)
-try:
-    page_text = doc.find(class_="list-tool-pagination-text").strong
-    pages = int(page_text.text.split("/")[-1].strip())  # Extracts the total number of pages as an integer
-except AttributeError:
-    pages = 1  # If pagination element is not found, set to 1
+# Step 3: Download the webpage
+response = requests.get(url)
 
-# Dictionary to store found items with details
-items_found = {}
+# Check if the request was successful
+if response.status_code != 200:
+    print("Failed to retrieve the webpage.")
+    exit()
 
-# Looping through each page of search results
-for page in range(1, pages + 1):
-    url = f"https://www.newegg.ca/p/pl?d={search_term}&N=4131&page={page}"
-    page_content = requests.get(url).text
-    doc = BeautifulSoup(page_content, "html.parser")
+# Step 4: Parse the webpage content
+soup = BeautifulSoup(response.text, "html.parser")
 
-    # Finding the container with all item listings
-    div = doc.find(class_="item-cells-wrap border-cells items-grid-view four-cells expulsion-one-cell")
-    if not div:
-        continue  # Skip if the container is not found
+# Step 5: Find all products on the page
+# Newegg lists products in 'div' tags with the class 'item-cell'
+products = soup.find_all('div', class_='item-cell')
 
-    # Finding all items that match the search term
-    items = div.find_all("div", class_="item-container")
-    for item in items:
-        # Extracting the item name
-        name_tag = item.find("a", class_="item-title")
-        if not name_tag:
-            continue
-        name = name_tag.text
+# Check if any products were found
+if not products:
+    print("No products found.")
+    exit()
 
-        # Extracting the item price
-        price_tag = item.find(class_="price-current")
-        if not price_tag or not price_tag.find("strong"):
-            continue
-        price = price_tag.find("strong").text.replace(",", "")
+# Step 6: Loop through the products and get their names and prices
+print(f"\nProducts found for '{search_term}':\n")
 
-        # Extracting the item link
-        link = name_tag['href']
+for product in products:
+    # Find the product name
+    name_tag = product.find('a', class_='item-title')
+    if name_tag:
+        product_name = name_tag.text
+    else:
+        product_name = "No name found"
 
-        # Adding item details to the dictionary
-        items_found[name] = {"price": int(price), "link": link}
+    # Find the product price
+    price_tag = product.find('li', class_='price-current')
+    if price_tag:
+        # The price is split into strong (dollars) and sup (cents)
+        dollars = price_tag.find('strong')
+        cents = price_tag.find('sup')
+        if dollars and cents:
+            product_price = f"${dollars.text}{cents.text}"
+        elif dollars:
+            product_price = f"${dollars.text}"
+        else:
+            product_price = "Price not available"
+    else:
+        product_price = "Price not available"
 
-# Sorting the items found by price in ascending order
-sorted_items = sorted(items_found.items(), key=lambda x: x[1]['price'])
-
-# Printing out the sorted items with their details
-for item in sorted_items:
-    print(item[0])  # Prints the name of the item
-    print(f"${item[1]['price']}")  # Prints the price of the item
-    print(item[1]['link'])  # Prints the URL of the item
-    print("-------------------------------")  # Prints a separator line for readability
+    # Print the product name and price
+    print(f"Name: {product_name}")
+    print(f"Price: {product_price}")
+    print("-" * 40)  # Prints a line to separate products
